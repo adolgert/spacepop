@@ -8,7 +8,9 @@
 #include "gtest/gtest.h"
 
 #include "admin_patch.h"
+#include "component_data.h"
 #include "gdal_raster.h"
+#include "gdal_vector.h"
 #include "on_demand_raster.h"
 #include "projection.h"
 #include "sparse_settlements.h"
@@ -38,6 +40,8 @@ po::options_description parser(const map<string,fs::path>& path_argument)
             ("test", "run all tests")
             ("tile-subset", po::value<int>(), "how many tiles to use")
             ("population-cutoff", po::value<double>(), "minimum people per pixel")
+            ("population-per-patch", po::value<double>(), "number of people in each patch")
+            ("admin-limit", po::value<int>(), "an upper limit on how many admin units to process")
             ;
     for (auto const& [name, default_path] : path_argument) {
         options.add_options()(name.c_str(), po::value<fs::path>(), name.c_str());
@@ -48,7 +52,7 @@ po::options_description parser(const map<string,fs::path>& path_argument)
 
 /*! Given command line args, assign file paths, using defaults.
  *
- * @param vm Variables initialized from teh command line.
+ * @param vm Variables initialized from the command line.
  * @param input_path A map from a keyword to a default filename for each file type.
  * @return Whether all the input files specified as defaults or on command line do exist.
  */
@@ -116,6 +120,14 @@ int entry(int argc, char* argv[])
     if (vm.count("population-cutoff")) {
         population_cutoff = vm["population-cutoff"].as<double>();
     }
+    double population_per_patch = 500;
+    if (vm.count("population-per-patch")) {
+        population_per_patch = vm["population-per-patch"].as<double>();
+    }
+    int admin_limit{std::numeric_limits<int>::max()};
+    if (vm.count("admin-limit")) {
+        admin_limit = vm["admin-limit"].as<int>();
+    }
     if (vm.count("test")) {
         ::testing::InitGoogleTest(&argc, argv);
         return RUN_ALL_TESTS();
@@ -141,7 +153,7 @@ int entry(int argc, char* argv[])
     auto pfpr_dataset = OpenGeoTiff(input_path.at("pfpr"));
     GDALRasterBand* pfpr_band = pfpr_dataset->GetRasterBand(1);
     vector<double> pfpr_geo_transform(6);
-    if (settlement_dataset->GetGeoTransform(&pfpr_geo_transform[0]) != CE_None) {
+    if (pfpr_dataset->GetGeoTransform(&pfpr_geo_transform[0]) != CE_None) {
         cout << "Could not get pfpr transform" << endl;
         return 10;
     }
@@ -150,13 +162,13 @@ int entry(int argc, char* argv[])
     OGRSpatialReference lat_long_srs(projection_ref);
     auto to_projected = reproject(&lat_long_srs);
 
-    auto admin_dataset = static_cast<GDALDataset *>(GDALOpenEx(
+    auto admin_dataset = GDALDatasetUniquePtr(static_cast<GDALDataset *>(GDALOpenEx(
             input_path.at("admin").c_str(),
             GDAL_OF_VECTOR | GDAL_OF_READONLY | GDAL_OF_VERBOSE_ERROR,
             nullptr,
             nullptr,
             nullptr
-    ));
+    )), GDALDatasetUniquePtrDeleter());
     if (admin_dataset == nullptr) {
         cout << "Could not load dataset from " << input_path.at("admin") << endl;
         return 7;
@@ -172,17 +184,24 @@ int entry(int argc, char* argv[])
 
     OGRLayer* first_admin_layer = *admin_dataset->GetLayers().begin();
     OGRMultiPolygon mp_buffer;
-    for (auto& admin_geometry: first_admin_layer) {
-        auto geometry = admin_geometry->GetGeometryRef();  // reference, not owned
+    int poly_idx{0};
+    vector<ComponentData> components;
+    first_admin_layer->ResetReading();
+    OGRFeature* geom_feature = first_admin_layer->GetNextFeature();
+    for (
+            int feature_idx=0;
+            (geom_feature != nullptr) && (feature_idx != admin_limit);
+            ++feature_idx, geom_feature = first_admin_layer->GetNextFeature()
+                    ) {
+        cout << "polygon " << poly_idx << endl;
+        auto geometry = geom_feature->GetGeometryRef();  // reference, not owned
         if (geometry != nullptr) {
             auto geometry_type = geometry->getGeometryType();
-            if (geometry_type != wkbPolygon && geometry_type != wkbMultiPolygon)
-            {
+            if (geometry_type != wkbPolygon && geometry_type != wkbMultiPolygon) {
                 throw std::runtime_error("Geometry wasn't a polygon.");
             }
             OGRMultiPolygon* multi_polygon{nullptr};
-            if (geometry_type == wkbPolygon)
-            {
+            if (geometry_type == wkbPolygon) {
                 // Directly means it doesn't clone the geometry, but adds it.
                 mp_buffer.addGeometryDirectly(geometry);
                 multi_polygon = &mp_buffer;
@@ -191,11 +210,15 @@ int entry(int argc, char* argv[])
                 multi_polygon = geometry->toMultiPolygon();
             }
             assert_x_is_longitude(multi_polygon);
-            map<array<int, 2>,PixelData> settlement_pfpr = sparse_settlements(
+            vector<PixelData> settlement_pfpr = sparse_settlements(
                     settlement_arr, pfpr_arr, multi_polygon, settlement_geo_transform, population_cutoff
             );
-            //CreatePatches(multi_polygon, settlement_pfpr, settlement_geo_transform);
-
+            auto patch_components = CreatePatches(
+                    multi_polygon, settlement_pfpr, settlement_geo_transform, population_per_patch
+                    );
+            std::copy(patch_components.begin(), patch_components.end(),
+                    back_inserter(components)
+                    );
             if (geometry_type == wkbPolygon) {
                 bool do_not_delete{false};  // because it belongs to the layer.
                 mp_buffer.removeGeometry(0, do_not_delete);
@@ -203,7 +226,9 @@ int entry(int argc, char* argv[])
         } else {
             cout << "geometry was null?" << endl;
         }
+        ++poly_idx;
     }
+    WriteVector("ug_patches.shp", components);
 
     return 0;
 //    std::vector<Point> points;

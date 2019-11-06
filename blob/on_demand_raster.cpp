@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <sstream>
 
@@ -7,21 +8,24 @@
 #include "on_demand_raster.h"
 
 
+using namespace std;
+
 namespace dd_harp {
 
 OnDemandRaster::OnDemandRaster(GDALRasterBand* band, const std::vector<double>& geo_transform)
         : _band(band), _transform(geo_transform) {
     this->_band->GetBlockSize(&_block_size[_X], &_block_size[_Y]);
     this->_size[_X] = this->_band->GetXSize();  // Track long, lat vs lat, long.
-    this->_size[_X] = this->_band->GetYSize();
+    this->_size[_Y] = this->_band->GetYSize();
     for (auto coord: {_X, _Y}) {
         this->_block_cnt[coord] = (this->_size[coord] + _block_size[coord] - 1) / _block_size[coord];
     }
+    assert(this->_band->GetRasterDataType() == GDALDataType::GDT_Float64);
 }
 
 
-double OnDemandRaster::at_coord(double lat_coord, double long_coord) {
-    auto ix = pixel_containing({lat_coord, long_coord}, this->_transform);
+double OnDemandRaster::at_coord(double long_coord, double lat_coord) {
+    auto ix = pixel_containing({long_coord, lat_coord}, this->_transform);
     return this->at(ix);
 }
 
@@ -55,5 +59,13 @@ double OnDemandRaster::at(std::array<int, 2> ix) {
     assert(index_in_block >= 0);
     assert(index_in_block < _block_size[_X] * _block_size[_Y]);
     return buffer->second.at(index_in_block);
+}
+
+
+OnDemandRaster::bounds OnDemandRaster::clip_to_bounds(const bounds& min_max) {
+    return {
+            {max(min_max.first[0], 0), max(min_max.first[1], 0)},
+            {min(min_max.second[0], this->_size[0]), min(min_max.second[1], this->_size[1])},
+    };
 }
 }
