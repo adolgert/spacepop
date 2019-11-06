@@ -12,6 +12,8 @@ class OGRMultiPolygon;
 namespace dd_harp
 {
     class PixelData;
+    class ComponentData;
+
     /*! Given an admin unit, create patches from the settlement layer.
      *
      * @param admin The admin unit, as a multi polygon, even if it's just one polygon.
@@ -27,9 +29,10 @@ namespace dd_harp
      *                                 Yp = padfTransform[3] + P*padfTransform[4] + L*padfTransform[5];
      * @param pfpr_geo_transform Also a transformation from (P,L) to (Xp, Yp).
      */
-    void CreatePatches(
-            OGRMultiPolygon* admin, std::map<std::array<int, 2>,PixelData>& settlement_pfpr,
-            const std::vector<double>& settlement_geo_transform
+    std::vector<ComponentData> CreatePatches(
+            OGRMultiPolygon* admin, std::vector<PixelData>& settlement_pfpr,
+            const std::vector<double>& settlement_geo_transform,
+            double population_per_patch
             );
 }
 

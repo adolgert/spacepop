@@ -71,26 +71,37 @@ namespace dd_harp {
 //! Convert a lat-long into a specific pixel.
     std::array<int, 2> pixel_containing(std::array<double, 2> coord, const std::vector<double>& transform);
 
-//! Convert a pixel corner into a lat-long
+//! Convert a pixel corner into a long-lat
     template<typename POINTISH>
     POINTISH pixel_coord(std::array<int, 2> pixel, const std::vector<double>& transform) {
         return {
-                transform[0] + pixel[0] * transform[1] + pixel[1] * transform[2],
-                transform[3] + pixel[0] * transform[4] + pixel[1] * transform[5]
+                transform.at(0) + pixel[0] * transform.at(1) + pixel[1] * transform.at(2),
+                transform.at(3) + pixel[0] * transform.at(4) + pixel[1] * transform.at(5)
         };
     }
 
 
-//! Convert a pixel into its four corners as lat-long.
-//  Boost::polygon likes to be clockwise, so these are clockwise.
+/*! Convert a pixel into its four corners as long-lat.
+ *  Boost::polygon likes to be clockwise, so these are clockwise.
+ */
     template<typename POINTISH>
     std::vector<POINTISH> pixel_bounds(std::array<int, 2> pixel, const std::vector<double>& transform) {
-        return {
-                pixel_coord<POINTISH>(pixel, transform),
-                pixel_coord<POINTISH>({pixel[0], pixel[1] + 1}, transform),
-                pixel_coord<POINTISH>({pixel[0] + 1, pixel[1] + 1}, transform),
-                pixel_coord<POINTISH>({pixel[0] + 1, pixel[1]}, transform)
-        };
+        bool right_handed_coordinate_system = (transform[1] * transform[5] > 0);
+        if (right_handed_coordinate_system) {
+            return {
+                    pixel_coord<POINTISH>(pixel, transform),
+                    pixel_coord<POINTISH>({pixel[0], pixel[1] + 1}, transform),
+                    pixel_coord<POINTISH>({pixel[0] + 1, pixel[1] + 1}, transform),
+                    pixel_coord<POINTISH>({pixel[0] + 1, pixel[1]}, transform)
+            };
+        } else {
+            return {
+                    pixel_coord<POINTISH>(pixel, transform),
+                    pixel_coord<POINTISH>({pixel[0] + 1, pixel[1]}, transform),
+                    pixel_coord<POINTISH>({pixel[0] + 1, pixel[1] + 1}, transform),
+                    pixel_coord<POINTISH>({pixel[0], pixel[1] + 1}, transform)
+            };
+        }
     }
 
 }
