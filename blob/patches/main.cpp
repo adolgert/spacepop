@@ -13,6 +13,7 @@
 #include "on_demand_raster.h"
 #include "projection.h"
 #include "sparse_settlements.h"
+#include "version.h"
 
 
 using namespace dd_harp;
@@ -36,6 +37,7 @@ po::options_description parser(const map<string,fs::path>& path_argument)
     po::options_description options("blob create");
     options.add_options()
             ("help", "write help message")
+            ("version", "print version")
             ("tile-subset", po::value<int>(), "how many tiles to use")
             ("population-cutoff", po::value<double>(), "minimum people per pixel")
             ("population-per-patch", po::value<double>(), "number of people in each patch")
@@ -104,6 +106,10 @@ int entry(int argc, char* argv[])
 
     if (vm.count("help")) {
         cout << parser(input_path) << endl;
+        return 0;
+    }
+    if (vm.count("version")) {
+        cout << BLOB_VERSION << endl;
         return 0;
     }
     if (!read_paths_from_command_line_args(vm, input_path)) {

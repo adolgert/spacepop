@@ -8,8 +8,13 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
     cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
+# Tell it where to find cmake macros and functions before
+# doing includes.
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+message(STATUS "Cmake module path ${CMAKE_MODULE_PATH}")
+
 find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+if(GIT_FOUND)
     execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always
         OUTPUT_VARIABLE BLOB_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -31,10 +36,6 @@ project(blob
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Tell it where to find cmake macros and functions before
-# doing includes.
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-message(STATUS "Cmake module path ${CMAKE_MODULE_PATH}")
 
 # Includes
 include(CheckCXXCompilerFlag)

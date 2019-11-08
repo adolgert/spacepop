@@ -1,6 +1,8 @@
 
 add_library(patches STATIC)
 
+configure_file(version.h.in version.h)
+
 target_sources(patches
   PRIVATE
     admin_patch.cpp 
@@ -25,7 +27,14 @@ target_sources(patches
         simple_patches.h
         sparse_settlements.h
         split_patches.h
+        version.h
 )
+
+# This is here to pick up version.h that is build by configuration.
+target_include_directories(patches
+        PUBLIC
+        "${PROJECT_BINARY_DIR}/patches"
+        )
 
 add_executable(blob main.cpp 
         )
