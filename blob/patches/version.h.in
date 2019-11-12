@@ -1,0 +1,1 @@
+#cmakedefine BLOB_VERSION "@BLOB_VERSION@"

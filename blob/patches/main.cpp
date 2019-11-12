@@ -5,7 +5,6 @@
 
 #include "gdal/gdal_priv.h"
 #include "gdal/ogrsf_frmts.h"
-#include "gtest/gtest.h"
 
 #include "admin_patch.h"
 #include "component_data.h"
@@ -14,6 +13,7 @@
 #include "on_demand_raster.h"
 #include "projection.h"
 #include "sparse_settlements.h"
+#include "version.h"
 
 
 using namespace dd_harp;
@@ -37,7 +37,7 @@ po::options_description parser(const map<string,fs::path>& path_argument)
     po::options_description options("blob create");
     options.add_options()
             ("help", "write help message")
-            ("test", "run all tests")
+            ("version", "print version")
             ("tile-subset", po::value<int>(), "how many tiles to use")
             ("population-cutoff", po::value<double>(), "minimum people per pixel")
             ("population-per-patch", po::value<double>(), "number of people in each patch")
@@ -108,6 +108,10 @@ int entry(int argc, char* argv[])
         cout << parser(input_path) << endl;
         return 0;
     }
+    if (vm.count("version")) {
+        cout << BLOB_VERSION << endl;
+        return 0;
+    }
     if (!read_paths_from_command_line_args(vm, input_path)) {
         return 3;
     }
@@ -127,10 +131,6 @@ int entry(int argc, char* argv[])
     int admin_limit{std::numeric_limits<int>::max()};
     if (vm.count("admin-limit")) {
         admin_limit = vm["admin-limit"].as<int>();
-    }
-    if (vm.count("test")) {
-        ::testing::InitGoogleTest(&argc, argv);
-        return RUN_ALL_TESTS();
     }
 
     // This initializes GDAL's list of drivers to read and write files.
